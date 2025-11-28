@@ -1,63 +1,39 @@
-DeepRegime: Transformer-Based Market Regime Modeling and Risk-Managed Allocation
+DeepRegime: Transformer-Based Market Regime Classification and Risk-Managed Allocation
 
-This repository contains an end-to-end framework for detecting market regimes using a Transformer-based sequence model and applying those regimes to dynamic risk allocation. The project demonstrates how regime-aware exposure control can improve risk-adjusted returns relative to static buy-and-hold benchmarks.
+This repository implements a Transformer-based market regime classifier trained on SPY/VIX features and integrates it into a dynamic exposure strategy. The objective is to demonstrate how sequence models can identify structural market regimes and how these predictions can be used to construct risk-managed trading strategies with improved risk-adjusted performance.
 
-The workflow includes:
+1. Overview
 
-Data preparation and feature engineering
+Financial markets exhibit distinct regimes such as high-volatility distress periods and low-volatility expansion periods. Identifying these regimes enables:
 
-Regime labeling (via KMeans on SPY/VIX structure)
+Controlled exposure to risk
 
-Transformer-based sequence classification
+Downside protection during turbulent periods
 
-Inference on historical windows
+Improved Sharpe ratios
 
-Backtesting dynamic exposure strategies
+More stable long-term performance
 
-Evaluation using cumulative return, Sharpe ratio, volatility, and drawdowns
+This project builds a regime-detection framework using a Transformer classifier and evaluates its economic usefulness in a backtesting environment.
 
-1. Project Overview
-
-Financial markets transition through distinct volatility and trend environments, commonly called "regimes."
-Examples include:
-
-Low-volatility, trend-friendly periods
-
-High-volatility, crisis periods
-
-Mean-reversion phases
-
-Risk-off events
-
-Understanding and predicting these regimes is central to professional quantitative investing.
-This project implements:
-
-A Transformer encoder that processes the most recent 60 days of SPY/VIX features
-
-A classification head that assigns each window to a regime
-
-A leveraged dynamic exposure strategy driven by the predicted regime
-
-A full backtesting engine to measure economic value
-
-2. Directory Structure
+2. Project Structure
 deepregime-transformer/
 │
 ├── deepregime/
 │   ├── models/
-│   │   └── transformer_regime.py        # Transformer architecture
+│   │   └── transformer_regime.py       # Transformer architecture
 │   ├── training/
-│   │   ├── dataset.py                   # Sliding window dataset construction
-│   │   └── train_transformer.py         # Model training loop
-│   ├── inference.py                     # Inference for last-N windows
+│   │   ├── dataset.py                  # Sliding window dataset generation
+│   │   └── train_transformer.py        # Training script
+│   ├── inference.py                    # Inference utilities
 │   └── backtest/
-│       └── backtest_leverage.py         # Backtest logic for regime-based strategies
+│       └── backtest_leverage.py        # Backtesting logic
 │
 ├── data/
-│   └── regimes/                         # SPY/VIX regime-labelled parquet data
+│   └── regimes/                         # Parquet files containing regime labels (SPY + VIX)
 │
 ├── notebooks/
-│   └── Regime_Transformer_Demo.ipynb    # Full demonstration notebook
+│   └── Regime_Transformer_Demo.ipynb    # End-to-end demonstration notebook
 │
 ├── plots/
 │   ├── regime_predictions.png
@@ -65,78 +41,69 @@ deepregime-transformer/
 │
 └── README.md
 
-3. Model Details
-Input Features
+3. Data and Features
 
-The model uses the following daily features over rolling 60-day windows:
+The model uses daily SPY and VIX-derived features:
 
-1-day, 5-day, 20-day returns
+1-day, 5-day, and 20-day returns
 
 5-day and 20-day realized volatility
 
-VIX index level
+VIX index levels
 
-Features are standardized using training-sample statistics.
+Regime labels are generated using KMeans clustering, which produces two interpretable market states:
 
-Transformer Architecture
+Regime 0: Low-volatility, stable market conditions
 
-2 Transformer encoder layers
+Regime 1: High-volatility, distressed conditions
 
-4 attention heads
+The model learns to classify the current market regime using the past 60 days of feature history.
 
-Model dimension d_model = 64
+4. Model Architecture
 
-Feed-forward dimension = 128
+A Transformer encoder is used for sequence modeling:
 
-Dropout = 0.1
+Sequence length: 60 days
 
-Classification head with cross-entropy loss
+Embedding dimension: 64
 
-Regime Labels
+Number of layers: 2
 
-Regimes are precomputed using KMeans clustering on SPY + VIX characteristics:
+Attention heads: 4
 
-Regime 0: Low-volatility / stable environments
+Hidden dimension: 128
 
-Regime 1: High-volatility / risk-off environments
+Dropout: 0.1
 
-4. Regime Prediction
+Output: Regime classification (0 or 1)
 
-The model generates daily regime predictions and regime probability distributions.
+The model is trained using cross-entropy loss with a train/validation split.
 
-The following figure illustrates predicted versus true regimes:
+5. Backtesting Methodology
 
-plots/regime_predictions.png
+Three strategies are evaluated:
 
+Buy & Hold SPY
 
-(Add the image once uploaded.)
+Baseline benchmark
 
-5. Backtesting
+Regime Filter Strategy
 
-Three strategies are compared:
+Invest in SPY only during Regime 0
 
-1. Buy & Hold SPY
+Move to cash during Regime 1
 
-Static long-only exposure.
+Leveraged Regime Strategy
 
-2. Regime Strategy (Unlevered)
+Apply 1.5× exposure in Regime 0
 
-Fully invested only in regime 0
+Apply 0.3× exposure in Regime 1
 
-In cash during regime 1
+Represents dynamic, model-driven risk scaling
 
-3. Leveraged Regime Strategy
+Equity curves, cumulative returns, daily statistics, and Sharpe ratios are computed.
 
-Dynamic exposure based on predicted regime:
-
-1.5× exposure in regime 0
-
-0.3× exposure in regime 1
-
-This reflects practical risk-managed portfolio construction used by professional systematic managers.
-
-6. Performance Summary
-
+6. Results
 Buy & Hold SPY
 
 Cumulative return: 635.50%
@@ -147,7 +114,7 @@ Daily mean return: 0.0476%
 
 Daily volatility: 1.2052%
 
-Regime Strategy (Unlevered)
+Regime Filter Strategy
 
 Cumulative return: 205.01%
 
@@ -167,56 +134,40 @@ Daily mean return: 0.0433%
 
 Daily volatility: 0.9290%
 
-7. Interpretation
+7. Performance Interpretation
 
-The leveraged regime strategy achieves:
+The leveraged regime strategy demonstrates:
 
-Higher Sharpe ratio than buy & hold
+Higher Sharpe ratio compared to buy-and-hold
 
-Substantial reduction in drawdowns
+Significantly reduced drawdowns
 
-Competitive long-term returns
+Competitive total returns
 
-Significantly smoother equity curve in crisis periods
+More stable equity growth during stress periods (e.g., 2008, 2020)
 
-This demonstrates that:
+These results indicate that the Transformer model learns regimes that are economically meaningful and suitable for dynamic risk allocation.
 
-The Transformer successfully learns meaningful volatility regimes.
-
-Regime predictions can be used for economically valuable risk allocation.
-
-A simple leveraged overlay can outperform buy & hold on a risk-adjusted basis.
-
-This system behaves similarly to practical volatility-aware or risk-parity-style strategies used at quantitative hedge funds.
-
-8. How to Run the Project
-Install dependencies
-pip install -r requirements.txt
-
-Train the regime Transformer
+8. How to Run
+Training
 python -m deepregime.training.train_transformer
 
-Run model inference
+Inference
 python -m deepregime.inference
 
-Backtest dynamic regime strategies
+Backtesting
 python -m deepregime.backtest.backtest_leverage
 
 9. Future Work
 
-Regime transition prediction (next 5–10 day regime flipping)
+Predict regime transitions (multi-step forecasting)
 
-Volatility targeting based on realized vol forecasts
+Multi-asset regime modeling (SPY, VIX, TLT, GOLD, credit spreads)
 
-Multi-asset regimes (SPY, VIX, TLT, GOLD, credit spreads)
+Volatility targeting and portfolio optimization
 
-Transaction cost modeling and slippage
+Incorporation of transaction costs and slippage
 
-Walk-forward train / validation framework
+Hyperparameter tuning and walk-forward validation
 
-Hyperparameter optimization
-
-Alternative clustering methods (HMMs, Gaussian Mixture Models)
-
-10. License# deepregime-transformer
-Transformer-based market regime detection for quant trading.
+Hidden Markov Model baseline comparison
