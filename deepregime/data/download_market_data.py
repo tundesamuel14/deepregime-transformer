@@ -1,84 +1,45 @@
-# deepregime/features/build_features.py
+# deepregime/data/download_market_data.py
 
-from pathlib import Path
 import pandas as pd
-import numpy as np
+import yfinance as yf
+from pathlib import Path
 
 # project root (deepregime-transformer/)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RAW_DIR = PROJECT_ROOT / "data" / "raw"
-FEATURE_DIR = PROJECT_ROOT / "data" / "features"
+DATA_DIR = PROJECT_ROOT / "data" / "raw"
 
 
-def load_spy_and_vix() -> pd.DataFrame:
+def download_asset(symbol: str, start: str = "2005-01-01", end: str = "2025-01-01") -> pd.DataFrame:
     """
-    Load SPY and VIX data from parquet and align them on dates.
-    Handles yfinance column naming (date vs Date, Adj Close vs Close).
+    Download daily OHLCV data for a symbol using yfinance.
     """
-    spy = pd.read_parquet(RAW_DIR / "spy.parquet")
-    vix = pd.read_parquet(RAW_DIR / "vix.parquet")
-
-    # Ensure we have a proper datetime index named "date" for both
-    if "date" in spy.columns:
-        spy["date"] = pd.to_datetime(spy["date"])
-        spy = spy.set_index("date").sort_index()
-    else:
-        spy.index = pd.to_datetime(spy.index)
-        spy.index.name = "date"
-
-    if "date" in vix.columns:
-        vix["date"] = pd.to_datetime(vix["date"])
-        vix = vix.set_index("date").sort_index()
-    else:
-        vix.index = pd.to_datetime(vix.index)
-        vix.index.name = "date"
-
-    # Handle price column name differences (Adj Close vs Close)
-    spy_price_col = "Adj Close" if "Adj Close" in spy.columns else "Close"
-    vix_price_col = "Adj Close" if "Adj Close" in vix.columns else "Close"
-
-    spy = spy.rename(columns={spy_price_col: "spy_close"})
-    vix = vix.rename(columns={vix_price_col: "vix_close"})
-
-    # Align on common dates
-    df = spy.join(vix[["vix_close"]], how="inner")
+    df = yf.download(symbol, start=start, end=end)
+    df = df.rename_axis("date").reset_index()
     return df
 
 
-def add_basic_features(df: pd.DataFrame) -> pd.DataFrame:
+def save_parquet(df: pd.DataFrame, name: str) -> None:
     """
-    Add returns, rolling volatility, and simple derived features.
+    Save a DataFrame to data/raw as parquet.
     """
-    df = df.copy()
-
-    # Daily returns
-    df["ret_1d"] = df["spy_close"].pct_change()
-
-    # Longer horizon returns
-    df["ret_5d"] = df["spy_close"].pct_change(5)
-    df["ret_20d"] = df["spy_close"].pct_change(20)
-
-    # Realized volatility (rolling)
-    df["rv_5d"] = df["ret_1d"].rolling(5).std() * np.sqrt(252)
-    df["rv_20d"] = df["ret_1d"].rolling(20).std() * np.sqrt(252)
-
-    # VIX as implied vol proxy
-    df["vix_level"] = df["vix_close"]
-
-    # Drop initial NaNs
-    df = df.dropna()
-    return df
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(DATA_DIR / f"{name}.parquet")
 
 
 def main():
-    FEATURE_DIR.mkdir(parents=True, exist_ok=True)
+    # Example: SPY (S&P 500 ETF) and VIX
+    market_symbols = {
+        "spy": "SPY",
+        "vix": "^VIX",
+    }
 
-    df = load_spy_and_vix()
-    df_feat = add_basic_features(df)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    out_path = FEATURE_DIR / "spy_vix_features.parquet"
-    df_feat.to_parquet(out_path)
-    print(f"Saved features to {out_path} with shape {df_feat.shape}")
+    for name, ticker in market_symbols.items():
+        print(f"Downloading {name} ({ticker})...")
+        df = download_asset(ticker)
+        save_parquet(df, name)
+        print(f"Saved to {DATA_DIR / f'{name}.parquet'}")
 
 
 if __name__ == "__main__":
