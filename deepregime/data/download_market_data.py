@@ -1,5 +1,3 @@
-# deepregime/data/download_market_data.py
-
 import pandas as pd
 import yfinance as yf
 from pathlib import Path

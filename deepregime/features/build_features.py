@@ -1,25 +1,42 @@
-# deepregime/features/build_features.py
-
 from pathlib import Path
 import pandas as pd
 import numpy as np
 
-RAW_DIR = Path("data/raw")
-FEATURE_DIR = Path("data/features")
+# project root (deepregime-transformer/)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+RAW_DIR = PROJECT_ROOT / "data" / "raw"
+FEATURE_DIR = PROJECT_ROOT / "data" / "features"
 
 
-def load_spy_and_vix():
+def load_spy_and_vix() -> pd.DataFrame:
+    """
+    Load SPY and VIX data from parquet and align them on dates.
+    Handles yfinance column naming (date vs Date, Adj Close vs Close).
+    """
     spy = pd.read_parquet(RAW_DIR / "spy.parquet")
     vix = pd.read_parquet(RAW_DIR / "vix.parquet")
 
-    spy = spy.rename(columns={"Adj Close": "spy_close"})
-    vix = vix.rename(columns={"Adj Close": "vix_close"})
+    # Ensure we have a proper datetime index named "date" for both
+    if "date" in spy.columns:
+        spy["date"] = pd.to_datetime(spy["date"])
+        spy = spy.set_index("date").sort_index()
+    else:
+        spy.index = pd.to_datetime(spy.index)
+        spy.index.name = "date"
 
-    spy["date"] = pd.to_datetime(spy["Date"])
-    vix["date"] = pd.to_datetime(vix["Date"])
+    if "date" in vix.columns:
+        vix["date"] = pd.to_datetime(vix["date"])
+        vix = vix.set_index("date").sort_index()
+    else:
+        vix.index = pd.to_datetime(vix.index)
+        vix.index.name = "date"
 
-    spy = spy.set_index("date").sort_index()
-    vix = vix.set_index("date").sort_index()
+    # Handle price column name differences (Adj Close vs Close)
+    spy_price_col = "Adj Close" if "Adj Close" in spy.columns else "Close"
+    vix_price_col = "Adj Close" if "Adj Close" in vix.columns else "Close"
+
+    spy = spy.rename(columns={spy_price_col: "spy_close"})
+    vix = vix.rename(columns={vix_price_col: "vix_close"})
 
     # Align on common dates
     df = spy.join(vix[["vix_close"]], how="inner")
@@ -57,8 +74,9 @@ def main():
     df = load_spy_and_vix()
     df_feat = add_basic_features(df)
 
-    df_feat.to_parquet(FEATURE_DIR / "spy_vix_features.parquet")
-    print(f"Saved features to {FEATURE_DIR / 'spy_vix_features.parquet'} with shape {df_feat.shape}")
+    out_path = FEATURE_DIR / "spy_vix_features.parquet"
+    df_feat.to_parquet(out_path)
+    print(f"Saved features to {out_path} with shape {df_feat.shape}")
 
 
 if __name__ == "__main__":
